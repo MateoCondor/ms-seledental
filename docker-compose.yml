@@ -1,0 +1,143 @@
+
+
+services:
+  # Base de datos CockroachDB para Auth Service
+  cockroachdb-auth:
+    image: cockroachdb/cockroach:latest
+    container_name: seledental-cockroachdb-auth
+    ports:
+      - "26257:26257"
+      - "8080:8080"
+    volumes:
+      - cockroach-auth-data:/cockroach/cockroach-data
+    command: start-single-node --insecure
+    environment:
+      - COCKROACH_DATABASE=auth_db
+    networks:
+      - microservices-network
+
+  # Base de datos CockroachDB para Usuario Service
+  cockroachdb-usuario:
+    image: cockroachdb/cockroach:latest
+    container_name: seledental-cockroachdb-usuario
+    ports:
+      - "26258:26257"
+      - "8081:8080"
+    volumes:
+      - cockroach-usuario-data:/cockroach/cockroach-data
+    command: start-single-node --insecure
+    environment:
+      - COCKROACH_DATABASE=usuario_db
+    networks:
+      - microservices-network
+
+  # Base de datos CockroachDB para Cita Service
+  cockroachdb-cita:
+    image: cockroachdb/cockroach:latest
+    container_name: seledental-cockroachdb-cita
+    ports:
+      - "26259:26257"
+      - "8082:8080"
+    volumes:
+      - cockroach-cita-data:/cockroach/cockroach-data
+    command: start-single-node --insecure
+    environment:
+      - COCKROACH_DATABASE=cita_db
+    networks:
+      - microservices-network
+
+  # RabbitMQ para manejo de colas
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: seledental-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin123
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - microservices-network
+
+  # Kong Database (PostgreSQL)
+  kong-database:
+    image: postgres:13
+    container_name: seledental-kong-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kong
+      POSTGRES_DB: kong
+      POSTGRES_PASSWORD: kongpass
+    volumes:
+      - kong-data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  # Kong Database Migration
+  kong-migration:
+    image: kong:3.4
+    container_name: seledental-kong-migration
+    command: "kong migrations bootstrap"
+    restart: "no"
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+    depends_on:
+      kong-database:
+        condition: service_healthy
+    networks:
+      - microservices-network
+
+  # Kong Gateway
+  kong:
+    image: kong:3.4
+    container_name: seledental-kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PG_DATABASE: kong
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    ports:
+      - "8000:8000"   # Kong Proxy HTTP
+      - "8443:8443"   # Kong Proxy HTTPS
+      - "8001:8001"   # Kong Admin API
+    depends_on:
+      kong-database:
+        condition: service_healthy
+      kong-migration:
+        condition: service_completed_successfully
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  cockroach-auth-data:
+  cockroach-usuario-data:
+  cockroach-cita-data:
+  rabbitmq-data:
+  kong-data:
+
+networks:
+  microservices-network:
+    driver: bridge

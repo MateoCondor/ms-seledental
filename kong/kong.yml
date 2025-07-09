@@ -1,0 +1,304 @@
+# Kong Declarative Configuration
+_format_version: "3.0"
+_transform: true
+
+# Servicios - Definición de tus microservicios
+services:
+  # Auth Service
+  - name: auth-service
+    url: http://host.docker.internal:3001
+    retries: 5
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+
+  # Usuario Service  
+  - name: usuario-service
+    url: http://host.docker.internal:3002
+    retries: 5
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+
+  # Cita Service
+  - name: cita-service
+    url: http://host.docker.internal:3003
+    retries: 5
+    connect_timeout: 60000
+    write_timeout: 60000
+    read_timeout: 60000
+
+# Rutas - Configuración completa basada en tus microservicios
+routes:
+  # AUTH SERVICE ROUTES
+  # Rutas públicas de auth
+  - name: auth-registro-cliente
+    service: auth-service
+    paths:
+      - /api/auth/registro-cliente
+    methods:
+      - POST
+    strip_path: false
+
+  - name: auth-login
+    service: auth-service
+    paths:
+      - /api/auth/login
+    methods:
+      - POST
+    strip_path: false
+
+  - name: auth-validar-token
+    service: auth-service
+    paths:
+      - /api/auth/validar-token
+    methods:
+      - POST
+    strip_path: false
+
+  # Rutas internas de auth
+  - name: auth-usuarios-internos
+    service: auth-service
+    paths:
+      - /api/auth/usuarios-internos
+    methods:
+      - GET
+    strip_path: false
+
+  # Rutas protegidas de auth
+  - name: auth-perfil
+    service: auth-service
+    paths:
+      - /api/auth/perfil
+    methods:
+      - GET
+    strip_path: false
+
+  - name: auth-registro-admin
+    service: auth-service
+    paths:
+      - /api/auth/registro
+    methods:
+      - POST
+    strip_path: false
+
+  # USUARIO SERVICE ROUTES
+  # Rutas públicas de usuarios
+  - name: usuarios-odontologos-disponibles
+    service: usuario-service
+    paths:
+      - /api/usuarios/odontologos/disponibles
+    methods:
+      - GET
+    strip_path: false
+
+  - name: usuarios-por-rol
+    service: usuario-service
+    paths:
+      - /api/usuarios/rol
+    regex_priority: 100
+    methods:
+      - GET
+    strip_path: false
+
+  - name: usuarios-por-auth-id
+    service: usuario-service
+    paths:
+      - /api/usuarios/auth
+    regex_priority: 100
+    methods:
+      - GET
+    strip_path: false
+
+  # Rutas protegidas de usuarios
+  - name: usuarios-lista
+    service: usuario-service
+    paths:
+      - /api/usuarios
+    methods:
+      - GET
+    strip_path: false
+
+  - name: usuarios-por-id
+    service: usuario-service
+    paths:
+      - /api/usuarios
+    regex_priority: 50
+    methods:
+      - GET
+      - PUT
+      - PATCH
+      - DELETE
+    strip_path: false
+
+  - name: usuarios-completar-perfil
+    service: usuario-service
+    paths:
+      - /api/usuarios
+    regex_priority: 90
+    methods:
+      - PUT
+    strip_path: false
+
+  # CITA SERVICE ROUTES
+  # Rutas principales de citas
+  - name: citas-lista
+    service: cita-service
+    paths:
+      - /api/citas
+    methods:
+      - GET
+      - POST
+    strip_path: false
+
+  - name: citas-por-id
+    service: cita-service
+    paths:
+      - /api/citas
+    regex_priority: 50
+    methods:
+      - GET
+    strip_path: false
+
+  # Rutas específicas de citas
+  - name: citas-asignar-odontologo
+    service: cita-service
+    paths:
+      - /api/citas
+    regex_priority: 90
+    methods:
+      - PUT
+    strip_path: false
+
+  - name: citas-reagendar
+    service: cita-service
+    paths:
+      - /api/citas
+    regex_priority: 85
+    methods:
+      - PUT
+    strip_path: false
+
+  - name: citas-cancelar
+    service: cita-service
+    paths:
+      - /api/citas
+    regex_priority: 85
+    methods:
+      - PUT
+    strip_path: false
+
+  - name: citas-estado
+    service: cita-service
+    paths:
+      - /api/citas
+    regex_priority: 80
+    methods:
+      - PATCH
+    strip_path: false
+
+  - name: citas-por-cliente
+    service: cita-service
+    paths:
+      - /api/citas/cliente
+    methods:
+      - GET
+    strip_path: false
+
+  - name: citas-por-odontologo
+    service: cita-service
+    paths:
+      - /api/citas/odontologo
+    methods:
+      - GET
+    strip_path: false
+
+  # Ruta catch-all para cada servicio (debe ir al final)
+  - name: auth-catch-all
+    service: auth-service
+    paths:
+      - /api/auth
+    regex_priority: 1
+    strip_path: false
+
+  - name: usuarios-catch-all
+    service: usuario-service
+    paths:
+      - /api/usuarios
+    regex_priority: 1
+    strip_path: false
+
+  - name: citas-catch-all
+    service: cita-service
+    paths:
+      - /api/citas
+    regex_priority: 1
+    strip_path: false
+
+# Plugins - Configuración de plugins para seguridad y funcionalidad
+plugins:
+  # Rate Limiting Global
+  - name: rate-limiting
+    config:
+      minute: 100
+      hour: 1000
+      policy: local
+
+  # CORS Global
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - Authorization
+      exposed_headers:
+        - X-Auth-Token
+      credentials: true
+      max_age: 3600
+
+  # Request Size Limiting
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 50
+
+  # Logging
+  - name: file-log
+    config:
+      path: /tmp/access.log
+
+# Consumers - Para autenticación avanzada (opcional)
+consumers:
+  - username: seledental-app
+    custom_id: app-001
+
+# Configuración de balanceador de carga para múltiples instancias
+upstreams:
+  - name: auth-upstream
+    algorithm: round-robin
+    targets:
+      - target: host.docker.internal:3001
+        weight: 100
+
+  - name: usuario-upstream  
+    algorithm: round-robin
+    targets:
+      - target: host.docker.internal:3002
+        weight: 100
+
+  - name: cita-upstream
+    algorithm: round-robin
+    targets:
+      - target: host.docker.internal:3003
+        weight: 100
