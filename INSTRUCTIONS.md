@@ -20,6 +20,9 @@ docker-compose up -d kong-database kong-migration kong
 # Finalmente verificar que todo esté corriendo
 docker-compose ps
 
+#de ser necesario resetear contenedores
+docker-compose down --volumes 
+docker-compose up -d
 ```
 
 #### 2. Configurar Kong

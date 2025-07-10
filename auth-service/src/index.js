@@ -14,6 +14,7 @@ const { sequelize, testDbConnection } = require('./config/database');
 const { initializeRabbitMQ } = require('./config/rabbitmq');
 const authRoutes = require('./routes/authRoutes');
 const { errorHandler } = require('./middleware/errorHandler');
+const Usuario = require('./models/Usuario');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -52,6 +53,40 @@ app.use('/api/auth', authRoutes);
 // Middleware de manejo de errores
 app.use(errorHandler);
 
+// Función para crear administrador por defecto
+const createDefaultAdmin = async () => {
+  try {
+    // Verificar si ya existe un admin
+    const adminExistente = await Usuario.findOne({
+      where: { email: 'admin@seledental.com' }
+    });
+
+    if (adminExistente) {
+      console.log('⚠️ El administrador ya existe');
+      return;
+    }
+
+    // Crear nuevo administrador
+    const nuevoAdmin = await Usuario.create({
+      nombre: 'Administrador',
+      apellido: 'Sistema',
+      email: 'admin@seledental.com',
+      password: 'admin123', // Se hasheará automáticamente
+      rol: 'administrador',
+      activo: true,
+      perfilCompleto: true
+    });
+
+    console.log('✅ Administrador creado exitosamente:');
+    console.log('Email:', nuevoAdmin.email);
+    console.log('Rol:', nuevoAdmin.rol);
+    console.log('ID:', nuevoAdmin.id);
+
+  } catch (error) {
+    console.error('❌ Error al crear administrador:', error);
+  }
+};
+
 // Inicializar el servidor
 const startServer = async () => {
   try {
@@ -62,6 +97,9 @@ const startServer = async () => {
     // Sincronizar modelos (force: false para no perder datos)
     await sequelize.sync({ force: false, alter: false });
     console.log('✅ Modelos sincronizados con la base de datos');
+
+    // Crear administrador por defecto
+    await createDefaultAdmin();
 
     // Inicializar RabbitMQ
     await initializeRabbitMQ();
