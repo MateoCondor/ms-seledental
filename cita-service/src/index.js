@@ -16,11 +16,13 @@ const { initializeRabbitMQ, subscribeToEvents } = require('./config/rabbitmq');
 const { initializeWebSocket } = require('./config/websocket');
 const citaRoutes = require('./routes/citaRoutes');
 const { errorHandler } = require('./middleware/errorHandler');
-const { startCronJobs } = require('./utils/cronJobs');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3003;
+
+// Configurar trust proxy para Kong Gateway
+app.set('trust proxy', 1);
 
 // Inicializar WebSocket
 initializeWebSocket(server);
@@ -77,10 +79,6 @@ const startServer = async () => {
     // Suscribirse a eventos
     await subscribeToEvents();
     console.log('✅ Suscripciones a eventos configuradas');
-
-    // Iniciar trabajos programados
-    startCronJobs();
-    console.log('✅ Trabajos programados iniciados');
 
     // Iniciar servidor
     server.listen(PORT, () => {

@@ -13,22 +13,23 @@ const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:30
  */
 const auth = async (req, res, next) => {
   try {
-    // Obtener el token del header Authorization
-    const token = req.header('Authorization');
-    
+     // Obtener el token del header Authorization
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+
     if (!token) {
       return errorResponse(res, 401, 'Acceso denegado. Token no proporcionado');
     }
     
+
     // Validar el token con el servicio de autenticación
     const response = await axios.post(`${AUTH_SERVICE_URL}/api/auth/validar-token`, {}, {
       headers: {
-        'Authorization': token
+        'Authorization': `Bearer ${token}`
       }
     });
     
     if (!response.data.success) {
-      return errorResponse(res, 401, 'Token inválido');
+      return errorResponse(res, 401, 'Acceso no autorizado. Token inválido o expirado');
     }
     
     // Agregar el usuario al objeto request

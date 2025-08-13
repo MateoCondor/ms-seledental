@@ -24,6 +24,17 @@ const sequelize = new Sequelize(DATABASE_URL, {
     timestamps: true,
     underscored: true,
   },
+  hooks: {
+    afterConnect: async (connection) => {
+      // Configurar CockroachDB para usar secuencias normales
+      try {
+        await connection.query('SET serial_normalization = sql_sequence');
+        console.log('✅ Serial normalization configurado para auth-service');
+      } catch (error) {
+        console.log('ℹ️ Serial normalization ya configurado o no disponible');
+      }
+    }
+  }
 });
 
 /**
@@ -37,6 +48,11 @@ const testDbConnection = async () => {
     // Crear la base de datos si no existe
     await sequelize.query('CREATE DATABASE IF NOT EXISTS auth_db');
     console.log('✅ Base de datos auth_db verificada');
+    
+    // Configurar para usar secuencias normales en lugar de unique_rowid()
+    await sequelize.query('SET serial_normalization = sql_sequence');
+    console.log('✅ Configuración de secuencias normalizada');
+    
   } catch (error) {
     console.error('❌ Error al conectar con la base de datos auth:', error);
     throw error;

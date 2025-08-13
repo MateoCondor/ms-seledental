@@ -5,36 +5,40 @@
 const express = require('express');
 const {
   crearCita,
-  obtenerCitas,
-  obtenerCitaPorId,
-  asignarOdontologo,
   reagendarCita,
   cancelarCita,
-  actualizarEstadoCita,
-  obtenerCitasPorCliente,
-  obtenerCitasPorOdontologo
+  obtenerCitasCliente,
+  obtenerCitasPendientes,
+  obtenerOdontologos,
+  asignarOdontologo,
+  obtenerCategorias,
+  obtenerHorariosDisponibles
 } = require('../controllers/citaController');
 const { auth } = require('../middleware/auth');
 const { validarRoles } = require('../middleware/checkRol');
 
 const router = express.Router();
 
+
+// Obtener categorías de consulta
+router.get('/categorias', obtenerCategorias);
+
+// Obtener horarios disponibles para una fecha
+router.get('/horarios-disponibles', obtenerHorariosDisponibles);
+
 // Todas las rutas requieren autenticación
 router.use(auth);
 
-// Rutas generales de citas
-router.get('/', validarRoles(['administrador', 'recepcionista', 'odontologo']), obtenerCitas);
+// Rutas para clientes
 router.post('/', validarRoles(['cliente', 'recepcionista', 'administrador']), crearCita);
-router.get('/:id', obtenerCitaPorId);
-
-// Rutas de modificación de citas
-router.put('/:id/asignar-odontologo', validarRoles(['recepcionista', 'administrador']), asignarOdontologo);
+router.get('/mis-citas', validarRoles(['cliente']), obtenerCitasCliente);
 router.put('/:id/reagendar', reagendarCita);
 router.put('/:id/cancelar', cancelarCita);
-router.patch('/:id/estado', validarRoles(['odontologo', 'recepcionista', 'administrador']), actualizarEstadoCita);
 
-// Rutas específicas por usuario
-router.get('/cliente/:clienteId', obtenerCitasPorCliente);
-router.get('/odontologo/:odontologoId', obtenerCitasPorOdontologo);
+// Rutas para recepcionista
+router.get('/pendientes', validarRoles(['recepcionista', 'administrador']), obtenerCitasPendientes);
+router.get('/odontologos', validarRoles(['recepcionista', 'administrador']), obtenerOdontologos);
+router.put('/:id/asignar-odontologo', validarRoles(['recepcionista', 'administrador']), asignarOdontologo);
+
 
 module.exports = router;

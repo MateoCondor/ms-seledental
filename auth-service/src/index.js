@@ -11,13 +11,16 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const { sequelize, testDbConnection } = require('./config/database');
-const { initializeRabbitMQ } = require('./config/rabbitmq');
+const { initializeRabbitMQ, publishUserCreated, subscribeToUserEvents} = require('./config/rabbitmq');
 const authRoutes = require('./routes/authRoutes');
 const { errorHandler } = require('./middleware/errorHandler');
 const Usuario = require('./models/Usuario');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Configurar trust proxy para Kong Gateway
+app.set('trust proxy', 1);
 
 // Configuración de seguridad
 app.use(helmet());
@@ -77,6 +80,18 @@ const createDefaultAdmin = async () => {
       perfilCompleto: true
     });
 
+    // Publicar evento USER_CREATED para replicar en usuario-service
+    await publishUserCreated({
+      id: nuevoAdmin.id,
+      nombre: nuevoAdmin.nombre,
+      apellido: nuevoAdmin.apellido,
+      email: nuevoAdmin.email,
+      password: nuevoAdmin.password,
+      rol: nuevoAdmin.rol,
+      activo: nuevoAdmin.activo,
+      perfilCompleto: nuevoAdmin.perfilCompleto
+    });
+
     console.log('✅ Administrador creado exitosamente:');
     console.log('Email:', nuevoAdmin.email);
     console.log('Rol:', nuevoAdmin.rol);
@@ -98,12 +113,16 @@ const startServer = async () => {
     await sequelize.sync({ force: false, alter: false });
     console.log('✅ Modelos sincronizados con la base de datos');
 
-    // Crear administrador por defecto
-    await createDefaultAdmin();
-
     // Inicializar RabbitMQ
     await initializeRabbitMQ();
     console.log('✅ Conexión a RabbitMQ establecida');
+
+    // Suscribirse a eventos de usuario
+    await subscribeToUserEvents();
+    console.log('✅ Suscripciones a eventos de usuario configuradas');
+
+    // Crear administrador por defecto
+    await createDefaultAdmin();
 
     // Iniciar servidor
     app.listen(PORT, () => {

@@ -213,15 +213,6 @@ function Show-KongInfo {
     Write-Host "Usuario Service:  http://localhost:8000/api/usuarios/*" -ForegroundColor White
     Write-Host "Cita Service:     http://localhost:8000/api/citas/*" -ForegroundColor White
     Write-Host "================================================" -ForegroundColor Gray
-    
-    Write-Host ""
-    Write-Host "Ejemplos de rutas especificas:" -ForegroundColor Cyan
-    Write-Host "Auth login:       POST http://localhost:8000/api/auth/login" -ForegroundColor Yellow
-    Write-Host "Auth registro:    POST http://localhost:8000/api/auth/registro-cliente" -ForegroundColor Yellow
-    Write-Host "Usuarios lista:   GET  http://localhost:8000/api/usuarios" -ForegroundColor Yellow
-    Write-Host "Odontologos:      GET  http://localhost:8000/api/usuarios/odontologos/disponibles" -ForegroundColor Yellow
-    Write-Host "Citas lista:      GET  http://localhost:8000/api/citas" -ForegroundColor Yellow
-    Write-Host "Crear cita:       POST http://localhost:8000/api/citas" -ForegroundColor Yellow
 }
 
 # Ejecutar configuracion

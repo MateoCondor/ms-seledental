@@ -18,6 +18,9 @@ const { errorHandler } = require('./middleware/errorHandler');
 const app = express();
 const PORT = process.env.PORT || 3002;
 
+// Configurar trust proxy para Kong Gateway
+app.set('trust proxy', 1);
+
 // Configuración de seguridad
 app.use(helmet());
 

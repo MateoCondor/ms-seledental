@@ -58,15 +58,34 @@ const Usuario = sequelize.define('Usuario', {
     allowNull: false,
     defaultValue: true
   },
+  cedula: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+    validate: {
+      len: [8, 20]
+    }
+  },
+  fechaNacimiento: {
+    type: DataTypes.DATEONLY,
+    allowNull: true
+  },
+  celular: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    validate: {
+      len: [8, 15]
+    }
+  },
+  direccion: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
   perfilCompleto: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: false
   },
-  fechaUltimoLogin: {
-    type: DataTypes.DATE,
-    allowNull: true
-  }
 }, {
   tableName: 'usuarios',
   timestamps: true,
@@ -91,12 +110,6 @@ const Usuario = sequelize.define('Usuario', {
 // Método de instancia para verificar contraseña
 Usuario.prototype.verificarPassword = async function(password) {
   return await bcrypt.compare(password, this.password);
-};
-
-// Método de instancia para actualizar fecha de último login
-Usuario.prototype.actualizarUltimoLogin = async function() {
-  this.fechaUltimoLogin = new Date();
-  await this.save();
 };
 
 module.exports = Usuario;

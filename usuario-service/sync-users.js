@@ -46,9 +46,9 @@ const sincronizarUsuarios = async () => {
       });
 
       if (!usuarioExistente) {
-        // Crear usuario en usuario-service
+        // Crear usuario en usuario-service con el mismo ID
         await Usuario.create({
-          authId: usuarioAuth.id,
+          id: usuarioAuth.id, // Usar el mismo ID del auth-service
           nombre: usuarioAuth.nombre,
           apellido: usuarioAuth.apellido,
           email: usuarioAuth.email,
@@ -60,10 +60,10 @@ const sincronizarUsuarios = async () => {
         sincronizados++;
         console.log(`✅ Usuario sincronizado: ${usuarioAuth.email}`);
       } else {
-        // Actualizar authId si no existe
-        if (!usuarioExistente.authId) {
-          await usuarioExistente.update({ authId: usuarioAuth.id });
-          console.log(`🔗 AuthId actualizado para: ${usuarioAuth.email}`);
+        // Actualizar ID si es diferente
+        if (usuarioExistente.id !== usuarioAuth.id) {
+          await usuarioExistente.update({ id: usuarioAuth.id });
+          console.log(`🔗 ID actualizado para: ${usuarioAuth.email}`);
         }
         existentes++;
       }

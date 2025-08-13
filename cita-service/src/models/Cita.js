@@ -118,31 +118,6 @@ const Cita = sequelize.define('Cita', {
     allowNull: true,
     field: 'notas_odontologo',
     comment: 'Notas del odontólogo después de la consulta'
-  },
-  // Campos adicionales para el microservicio
-  prioridad: {
-    type: DataTypes.STRING,
-    defaultValue: 'media',
-    allowNull: false,
-    validate: {
-      isIn: [['baja', 'media', 'alta', 'urgente']]
-    }
-  },
-  recordatorioEnviado: {
-    type: DataTypes.BOOLEAN,
-    defaultValue: false,
-    allowNull: false,
-    field: 'recordatorio_enviado'
-  },
-  fechaRecordatorio: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    field: 'fecha_recordatorio'
-  },
-  costoEstimado: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: true,
-    field: 'costo_estimado'
   }
 }, {
   tableName: 'citas',
@@ -162,9 +137,6 @@ const Cita = sequelize.define('Cita', {
     },
     {
       fields: ['tipo_consulta'] // Usar el nombre de columna real
-    },
-    {
-      fields: ['prioridad']
     }
   ]
 });

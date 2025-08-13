@@ -44,10 +44,11 @@ Este proyecto implementa un sistema de gestión dental basado en una **arquitect
 - **CORS 2.8.5**: Control de acceso entre dominios
 
 ### Comunicación y Mensajería
-- **RabbitMQ**: Sistema de colas para comunicación asíncrona
+- **RabbitMQ 3-management**: Sistema de colas para comunicación asíncrona
 - **amqplib 0.10.3**: Cliente AMQP para Node.js
 - **axios 1.6.0**: Cliente HTTP para comunicación entre servicios
 - **Socket.io 4.8.1**: Comunicación en tiempo real (WebSockets)
+- **socket.io-client 4.8.1**: Cliente WebSocket
 
 ### Gateway y Balanceado
 - **Kong 3.4**: API Gateway y Service Mesh
@@ -55,6 +56,7 @@ Este proyecto implementa un sistema de gestión dental basado en una **arquitect
 
 ### Infraestructura y DevOps
 - **Docker & Docker Compose**: Containerización y orquestación
+- **CockroachDB Latest**: Base de datos distribuida
 - **dotenv 16.5.0**: Manejo de variables de entorno
 - **morgan 1.10.0**: Logger HTTP middleware
 - **nodemon 3.1.10**: Hot reload para desarrollo
@@ -62,24 +64,24 @@ Este proyecto implementa un sistema de gestión dental basado en una **arquitect
 ### Utilidades y Herramientas
 - **node-cron 3.0.3**: Programación de tareas automáticas
 - **PowerShell**: Scripts de automatización para Windows
+- **Sequelize**: ORM para manejo de bases de datos
 
 ---
 
 ## 🗂️ Estructura del Proyecto
 
 ```
-ms-servers/
+ms-seledental/
 ├── docker-compose.yml          # Orquestación de contenedores
 ├── setup-kong.ps1            # Script de configuración automática
 ├── INSTRUCTIONS.md            # Instrucciones de instalación
-├── RUTAS-MAPPING.md          # Mapeo de rutas y endpoints
 │
 ├── auth-service/             # 🔐 Microservicio de Autenticación
 │   ├── src/
-│   │   ├── controllers/      # Lógica de negocio
+│   │   ├── controllers/      # Lógica de negocio de autenticación
 │   │   ├── middleware/       # Middlewares (auth, roles, errores)
-│   │   ├── models/          # Modelos de datos (Sequelize)
-│   │   ├── routes/          # Definición de rutas
+│   │   ├── models/          # Modelo Usuario para autenticación
+│   │   ├── routes/          # Rutas de auth (login, registro, etc.)
 │   │   ├── utils/           # Utilidades (JWT, respuestas)
 │   │   └── config/          # Configuración (DB, RabbitMQ)
 │   ├── package.json
@@ -87,24 +89,24 @@ ms-servers/
 │
 ├── usuario-service/          # 👥 Microservicio de Usuarios
 │   ├── src/
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── utils/
-│   │   └── config/
+│   │   ├── controllers/      # Gestión completa de usuarios
+│   │   ├── middleware/       # Middlewares de validación
+│   │   ├── models/          # Modelo Usuario extendido
+│   │   ├── routes/          # Rutas de gestión de usuarios
+│   │   ├── utils/           # Utilidades de usuario
+│   │   └── config/          # Configuración (DB, RabbitMQ)
 │   ├── package.json
 │   └── sync-users.js        # Sincronización de usuarios
 │
 ├── cita-service/            # 📅 Microservicio de Citas
 │   ├── src/
-│   │   ├── controllers/
-│   │   ├── middleware/
-│   │   ├── models/
-│   │   ├── routes/
-│   │   ├── services/        # Servicios externos
-│   │   ├── utils/          # Includes cronJobs
-│   │   └── config/         # Includes WebSocket config
+│   │   ├── controllers/     # Gestión completa de citas
+│   │   ├── middleware/      # Middlewares de validación
+│   │   ├── models/         # Modelo Cita
+│   │   ├── routes/         # Rutas de gestión de citas
+│   │   ├── services/       # Comunicación con otros servicios
+│   │   ├── utils/          # Cron jobs y utilidades
+│   │   └── config/         # WebSocket, DB, RabbitMQ
 │   └── package.json
 │
 └── kong/
@@ -123,10 +125,13 @@ ms-servers/
 - Gestión de roles y permisos
 
 **Endpoints Principales:**
-- `POST /api/auth/registro-cliente` - Registro de clientes
-- `POST /api/auth/login` - Autenticación
+- `POST /api/auth/registro-cliente` - Registro público de clientes
+- `POST /api/auth/registro` - Registro de personal (solo admin)
+- `POST /api/auth/login` - Autenticación de usuarios
 - `POST /api/auth/validar-token` - Validación de JWT
 - `GET /api/auth/perfil` - Perfil del usuario autenticado
+- `PUT /api/auth/completar-perfil` - Completar perfil de cliente
+- `GET /api/auth/usuarios-internos` - Usuarios internos (para otros servicios)
 
 **Características:**
 - Rate limiting (100 requests/15min)
@@ -142,9 +147,12 @@ ms-servers/
 - Gestión de disponibilidad de odontólogos
 
 **Endpoints Principales:**
-- `GET /api/usuarios/odontologos/disponibles` - Odontólogos disponibles
+- `GET /api/usuarios` - Lista de usuarios (admin/recepcionista)
+- `GET /api/usuarios/:id` - Usuario por ID
+- `POST /api/usuarios` - Crear usuario (admin/recepcionista)
+- `PUT /api/usuarios/:id` - Actualizar usuario
+- `DELETE /api/usuarios/:id` - Eliminar usuario (admin/recepcionista)
 - `GET /api/usuarios/rol/:rol` - Usuarios por rol
-- `PUT /api/usuarios/:id/completar-perfil` - Completar perfil
 - `PATCH /api/usuarios/:id/toggle-activo` - Activar/desactivar usuario
 
 **Características:**
@@ -160,15 +168,24 @@ ms-servers/
 - Notificaciones en tiempo real
 
 **Endpoints Principales:**
+- `GET /api/citas/categorias` - Categorías de consulta disponibles
+- `GET /api/citas/horarios-disponibles` - Horarios disponibles por fecha
 - `POST /api/citas` - Crear nueva cita
-- `PUT /api/citas/:id/reagendar` - Reagendar cita
-- `PATCH /api/citas/:id/estado` - Cambiar estado
+- `GET /api/citas/mis-citas` - Citas del cliente autenticado
+- `PUT /api/citas/:id/reagendar` - Reagendar cita existente
+- `PUT /api/citas/:id/cancelar` - Cancelar cita
+- `GET /api/citas/pendientes` - Citas pendientes (recepcionista/admin)
+- `GET /api/citas/odontologos` - Lista de odontólogos disponibles
+- `PUT /api/citas/:id/asignar-odontologo` - Asignar odontólogo a cita
 
 **Características:**
-- WebSockets para notificaciones en tiempo real
-- Cron jobs para automatización
+- WebSockets para notificaciones en tiempo real (Socket.io)
+- Cron jobs para recordatorios automáticos de citas
+- Sistema de categorías de consulta (general, control, urgencia)
 - Validaciones de horarios y disponibilidad
-- Integración con Usuario Service
+- Integración con Usuario Service via HTTP
+- Gestión de estados de citas (pendiente, confirmada, completada, cancelada)
+- Comunicación asíncrona via RabbitMQ
 
 ---
 
@@ -182,10 +199,18 @@ ms-servers/
 ### Servicios Registrados
 ```yaml
 services:
-  - auth-service: http://host.docker.internal:3001
-  - usuario-service: http://host.docker.internal:3002
-  - cita-service: http://host.docker.internal:3003
+  - auth-service: Puerto 3001
+  - usuario-service: Puerto 3002  
+  - cita-service: Puerto 3003
 ```
+
+### Puertos de Infraestructura
+- **Kong Gateway**: 8000 (HTTP), 8443 (HTTPS), 8001 (Admin API)
+- **CockroachDB Auth**: 26257, UI en 8080
+- **CockroachDB Usuario**: 26258, UI en 8081
+- **CockroachDB Cita**: 26259, UI en 8082
+- **RabbitMQ**: 5672 (AMQP), 15672 (Management UI)
+- **Kong Database**: PostgreSQL en puerto interno
 
 ### Rutas Configuradas
 - **Auth**: `/api/auth/*` → auth-service
@@ -211,9 +236,9 @@ services:
   - `cockroachdb-cita` (Puerto 26259)
 
 ### Modelos de Datos
-- **Usuario**: Información personal, roles, estados
-- **Cita**: Fechas, estados, relaciones con usuarios
-- **Autenticación**: Credenciales, tokens, sesiones
+- **Usuario (Auth)**: Información básica para autenticación (id, nombre, apellido, email, password, rol)
+- **Usuario (Usuario Service)**: Perfil completo con especialidades, horarios, etc.
+- **Cita**: Fechas, estados, categorías, relaciones con usuarios, recordatorios
 
 ### Características
 - **ACID Compliance**: Transacciones seguras
@@ -238,7 +263,9 @@ services:
 ### Uso en el Sistema
 - Sincronización de usuarios entre Auth y Usuario Service
 - Notificaciones de cambios de estado de citas
-- Logs distribuidos y auditoría
+- Recordatorios automáticos de citas
+- Eventos de creación, actualización y cancelación de citas
+- Logs distribuidos y auditoría del sistema
 
 ---
 
@@ -302,15 +329,23 @@ services:
 - **sync-users.js**: Sincronización inicial de usuarios
 
 ### Comandos de Desarrollo
-```bash
+```powershell
 # Infraestructura
 docker-compose up -d
 
-# Desarrollo individual
-npm run dev  # En cada microservicio
-
 # Configuración Kong
-./setup-kong.ps1
+.\setup-kong.ps1
+
+# Desarrollo individual (en cada microservicio)
+npm run dev
+
+# Crear usuario administrador inicial
+cd auth-service
+npm run create-admin
+
+# Sincronizar usuarios iniciales
+cd ../usuario-service
+node sync-users.js
 ```
 
 ---
@@ -323,14 +358,43 @@ npm run dev  # En cada microservicio
 - **Centralized Logs**: Mediante Docker logging drivers
 
 ### Health Checks
-- **Endpoint /health**: En cada microservicio
-- **Kong Health Checks**: Verificación automática de servicios
-- **Database Health**: Connection pooling y retry logic
+- **Endpoint /health**: En cada microservicio para verificar estado
+- **Kong Health Checks**: Verificación automática de servicios backend
+- **Database Health**: Connection pooling y retry logic en todos los servicios
+- **RabbitMQ Health**: Verificación de conexiones de mensaje
 
 ### Metrics y Monitoring
-- **RabbitMQ Management**: UI para monitoreo de colas
-- **Kong Admin API**: Métricas de gateway
-- **CockroachDB UI**: Monitoreo de base de datos
+- **RabbitMQ Management**: UI para monitoreo de colas (Puerto 15672)
+- **Kong Admin API**: Métricas de gateway (Puerto 8001)
+- **CockroachDB UI**: Monitoreo de base de datos (Puertos 8080-8082)
+- **WebSocket Monitoring**: Conexiones en tiempo real
+- **Cron Job Logs**: Monitoreo de tareas programadas
+
+---
+
+## ✨ Funcionalidades Implementadas
+
+### Sistema de Citas Inteligente
+- **Categorización de Consultas**: General, Control y Urgencia con subcategorías específicas
+- **Horarios Disponibles**: Verificación automática de disponibilidad por fecha
+- **Asignación de Odontólogos**: Manual y automática según disponibilidad
+- **Gestión de Estados**: Pendiente → Confirmada → Completada/Cancelada/No Asistió
+
+### Notificaciones en Tiempo Real
+- **WebSocket Integration**: Actualizaciones instantáneas de citas
+- **Recordatorios Automáticos**: Cron jobs para notificaciones 24h y 2h antes
+- **Event Broadcasting**: Comunicación asíncrona entre servicios
+
+### Gestión de Usuarios Avanzada
+- **Roles Granulares**: Cliente, Odontólogo, Recepcionista, Administrador
+- **Perfiles Dinámicos**: Completado progresivo de información
+- **Sincronización Automática**: Entre Auth y Usuario Service via RabbitMQ
+
+### Seguridad Robusta
+- **JWT con Roles**: Tokens con información de permisos
+- **Rate Limiting**: 100 requests por 15 minutos por IP
+- **Validación de Entrada**: Sanitización y validación de todos los datos
+- **Encriptación**: Contraseñas hasheadas con bcrypt
 
 ---
 
@@ -396,5 +460,5 @@ El uso de tecnologías modernas como Kong, CockroachDB, RabbitMQ y Docker garant
 
 ---
 
-*Documentación generada para el proyecto SeléDental - Sistema de Microservicios*
-*Fecha: Julio 2025*
+*Documentación actualizada para el proyecto SeléDental - Sistema de Microservicios*
+*Fecha: Diciembre 2024*

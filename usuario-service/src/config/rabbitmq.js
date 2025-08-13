@@ -17,11 +17,15 @@ const initializeRabbitMQ = async () => {
 
     // Declarar exchanges
     await channel.assertExchange('user.events', 'topic', { durable: true });
+    await channel.assertExchange('auth.events', 'topic', { durable: true });
     await channel.assertExchange('cita.events', 'topic', { durable: true });
 
     // Declarar colas para este servicio
     await channel.assertQueue('usuario.profile.updated', { durable: true });
     await channel.assertQueue('usuario.user.created', { durable: true });
+    await channel.assertQueue('usuario.user.updated', { durable: true });
+    await channel.assertQueue('usuario.user.deleted', { durable: true });
+    await channel.assertQueue('usuario.auth.events', { durable: true });
 
     console.log('✅ RabbitMQ configurado para Usuario Service');
   } catch (error) {
@@ -39,7 +43,6 @@ const subscribeToEvents = async () => {
     
     // Escuchar eventos de usuario creado desde auth-service
     await channel.bindQueue('usuario.user.created', 'user.events', 'user.created');
-    
     await channel.consume('usuario.user.created', async (msg) => {
       if (msg) {
         try {
@@ -52,9 +55,9 @@ const subscribeToEvents = async () => {
           });
           
           if (!usuarioExistente) {
-            // Crear usuario en usuario-service con los datos del auth-service
+            // Crear usuario en usuario-service con el mismo ID del auth-service
             const nuevoUsuario = await Usuario.create({
-              authId: eventData.data.id, // ID del auth-service
+              id: eventData.data.id, // Usar el mismo ID del auth-service
               nombre: eventData.data.nombre,
               apellido: eventData.data.apellido,
               email: eventData.data.email,
@@ -77,10 +80,88 @@ const subscribeToEvents = async () => {
       }
     });
 
+    // Escuchar eventos de usuario actualizado desde auth-service
+    await channel.bindQueue('usuario.user.updated', 'user.events', 'user.updated');
+    await channel.consume('usuario.user.updated', async (msg) => {
+      if (msg) {
+        try {
+          const eventData = JSON.parse(msg.content.toString());
+          console.log('📥 Evento USER_UPDATED recibido en usuario-service:', eventData.data);
+
+          const Usuario = require('../models/Usuario');
+          const usuario = await Usuario.findByPk(eventData.data.id);
+          if (usuario) {
+            await usuario.update(eventData.data);
+          }
+          channel.ack(msg);
+        } catch (error) {
+          console.error('❌ Error procesando evento USER_UPDATED:', error);
+          channel.nack(msg, false, true);
+        }
+      }
+    });
+
+    // Escuchar eventos de usuario eliminado desde auth-service
+    await channel.assertQueue('usuario.user.deleted', { durable: true });
+    await channel.bindQueue('usuario.user.deleted', 'user.events', 'user.deleted');
+    await channel.consume('usuario.user.deleted', async (msg) => {
+      if (msg) {
+        try {
+          const eventData = JSON.parse(msg.content.toString());
+          console.log('📥 Evento USER_DELETED recibido en usuario-service:', eventData.data);
+
+          const Usuario = require('../models/Usuario');
+          const usuario = await Usuario.findByPk(eventData.data.userId);
+          if (usuario) {
+            await usuario.update({ activo: false });
+            console.log('✅ Usuario desactivado en usuario-service:', eventData.data.userId);
+          }
+          channel.ack(msg);
+        } catch (error) {
+          console.error('❌ Error procesando evento USER_DELETED:', error);
+          channel.nack(msg, false, true);
+        }
+      }
+    });
+
+    // Escuchar eventos de auth-service
+    await channel.bindQueue('usuario.auth.events', 'auth.events', 'auth.*');
+    await channel.consume('usuario.auth.events', async (msg) => {
+      if (msg) {
+        try {
+          const eventData = JSON.parse(msg.content.toString());
+          console.log('📥 Evento AUTH recibido en usuario-service:', eventData.eventType);
+          
+          // Procesar diferentes tipos de eventos de auth
+          switch(eventData.eventType) {
+            case 'USER_LOGIN':
+              // Aquí puedes registrar el login, actualizar última fecha de acceso, etc.
+              const Usuario = require('../models/Usuario');
+              const usuario = await Usuario.findByPk(eventData.data.userId);
+              if (usuario) {
+                await usuario.update({ 
+                  fechaUltimoLogin: new Date()
+                });
+              }
+              break;
+            default:
+              console.log('Evento AUTH no manejado:', eventData.eventType);
+          }
+          
+          channel.ack(msg);
+        } catch (error) {
+          console.error('❌ Error procesando evento AUTH:', error);
+          channel.nack(msg, false, true);
+        }
+      }
+    });
+
     console.log('✅ Suscripción a eventos configurada');
   } catch (error) {
     console.error('❌ Error al configurar suscripciones:', error);
   }
+  
+
 };
 
 /**

@@ -6,7 +6,8 @@
 const Usuario = require('../models/Usuario');
 const { generarJWT, verificarJWT } = require('../utils/jwt');
 const { successResponse, errorResponse } = require('../utils/responses');
-const { publishUserCreated, publishUserLogin } = require('../config/rabbitmq');
+const { publishUserCreated, publishUserLogin, publishUserUpdated, publishUserDeleted } = require('../config/rabbitmq');
+const { Op } = require('sequelize');
 
 /**
  * Registra un nuevo cliente (registro público)
@@ -174,9 +175,6 @@ const login = async (req, res) => {
       return errorResponse(res, 401, 'Contraseña incorrecta');
     }
     
-    // Actualizar fecha de último login
-    await usuario.actualizarUltimoLogin();
-    
     // Generar JWT
     const token = generarJWT(usuario);
     
@@ -297,7 +295,7 @@ const obtenerUsuariosInternos = async (req, res) => {
       order: [['id', 'ASC']]
     });
 
-    return successResponse(res, 'Usuarios obtenidos exitosamente', {
+    return successResponse(res, 200, 'Usuarios obtenidos exitosamente', {
       usuarios,
       total: usuarios.length
     });
@@ -307,11 +305,234 @@ const obtenerUsuariosInternos = async (req, res) => {
   }
 };
 
+/**
+ * Completa el perfil de un cliente
+ */
+const completarPerfil = async (req, res) => {
+  try {
+    const { cedula, fechaNacimiento, celular, direccion } = req.body;
+    const usuarioId = req.usuario.id;
+    
+    // Buscar el usuario
+    const usuario = await Usuario.findByPk(usuarioId);
+    if (!usuario) {
+      return errorResponse(res, 404, 'Usuario no encontrado');
+    }
+    
+    // Verificar que sea un cliente
+    if (usuario.rol !== 'cliente') {
+      return errorResponse(res, 403, 'Solo los clientes pueden completar este perfil');
+    }
+    
+    // Verificar si la cédula ya está en uso por otro usuario
+    if (cedula) {
+      const usuarioConCedula = await Usuario.findOne({ 
+        where: { 
+          cedula,
+          id: { [Op.ne]: usuarioId } // Excluir el usuario actual
+        } 
+      });
+      if (usuarioConCedula) {
+        return errorResponse(res, 400, 'La cédula ya está registrada por otro usuario');
+      }
+    }
+    
+    // Actualizar el usuario
+    await usuario.update({
+      cedula,
+      fechaNacimiento,
+      celular,
+      direccion,
+      perfilCompleto: true
+    });
+
+    // Publicar evento de usuario actualizado
+    await publishUserUpdated({
+      id: usuario.id,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      email: usuario.email,
+      rol: usuario.rol,
+      cedula: usuario.cedula,
+      fechaNacimiento: usuario.fechaNacimiento,
+      celular: usuario.celular,
+      direccion: usuario.direccion,
+      perfilCompleto: usuario.perfilCompleto,
+      activo: usuario.activo
+    });
+    
+    // Obtener el usuario actualizado sin la contraseña
+    const usuarioActualizado = await Usuario.findByPk(usuarioId, {
+      attributes: { exclude: ['password'] }
+    });
+    
+    return successResponse(res, 200, 'Perfil completado correctamente', {
+      usuario: {
+        id: usuarioActualizado.id,
+        nombre: usuarioActualizado.nombre,
+        apellido: usuarioActualizado.apellido,
+        email: usuarioActualizado.email,
+        cedula: usuarioActualizado.cedula,
+        fechaNacimiento: usuarioActualizado.fechaNacimiento,
+        celular: usuarioActualizado.celular,
+        direccion: usuarioActualizado.direccion,
+        rol: usuarioActualizado.rol,
+        perfilCompleto: usuarioActualizado.perfilCompleto
+      }
+    });
+  } catch (error) {
+    console.error('Error al completar perfil:', error);
+    
+    // Manejar errores de validación de Sequelize
+    if (error.name === 'SequelizeValidationError') {
+      const errores = error.errors.map(err => ({
+        campo: err.path,
+        mensaje: err.message
+      }));
+      return errorResponse(res, 400, 'Error de validación', errores);
+    }
+    
+    return errorResponse(res, 500, 'Error al completar el perfil');
+  }
+};
+
+/**
+ * Actualiza un usuario (solo para administradores o el propio usuario)
+ */
+const actualizarUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const datosActualizacion = req.body;
+
+    // Buscar usuario a actualizar
+    const usuario = await Usuario.findByPk(id);
+    if (!usuario) {
+      return errorResponse(res, 404, 'Usuario no encontrado');
+    }
+
+    // Solo el propio usuario o un administrador puede actualizar
+    if (
+      req.usuario.rol !== 'administrador' &&
+      req.usuario.id !== usuario.id
+    ) {
+      return errorResponse(res, 403, 'No autorizado para actualizar este usuario');
+    }
+
+    // No permitir actualizar campos sensibles
+    delete datosActualizacion.id;
+    delete datosActualizacion.email;
+    delete datosActualizacion.password;
+    delete datosActualizacion.rol; // Solo admin puede cambiar rol (opcional, refuerza seguridad)
+
+    // Si es admin y quiere cambiar el rol, permitirlo
+    if (req.usuario.rol === 'administrador' && datosActualizacion.rol) {
+      usuario.rol = datosActualizacion.rol;
+    }
+
+    // Actualizar usuario
+    await usuario.update(datosActualizacion);
+
+    // Publicar evento de usuario actualizado
+    await publishUserUpdated({
+      id: usuario.id,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      email: usuario.email,
+      rol: usuario.rol,
+      cedula: usuario.cedula,
+      fechaNacimiento: usuario.fechaNacimiento,
+      celular: usuario.celular,
+      direccion: usuario.direccion,
+      perfilCompleto: usuario.perfilCompleto,
+      activo: usuario.activo
+    });
+
+    // Responder con usuario actualizado (sin password)
+    return successResponse(res, 200, 'Usuario actualizado exitosamente', {
+      usuario: {
+        id: usuario.id,
+        nombre: usuario.nombre,
+        apellido: usuario.apellido,
+        email: usuario.email,
+        rol: usuario.rol,
+        perfilCompleto: usuario.perfilCompleto,
+        activo: usuario.activo,
+        cedula: usuario.cedula,
+        fechaNacimiento: usuario.fechaNacimiento,
+        celular: usuario.celular,
+        direccion: usuario.direccion,
+        createdAt: usuario.createdAt,
+        updatedAt: usuario.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error al actualizar usuario:', error);
+
+    if (error.name === 'SequelizeValidationError') {
+      const errores = error.errors.map(err => ({
+        campo: err.path,
+        mensaje: err.message
+      }));
+      return errorResponse(res, 400, 'Error de validación', errores);
+    }
+
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return errorResponse(res, 400, 'Ya existe un usuario con esos datos únicos');
+    }
+
+    return errorResponse(res, 500, 'Error al actualizar usuario');
+  }
+};
+
+/**
+ * Elimina un usuario (desactivación lógica)
+ */
+const eliminarUsuario = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const usuario = await Usuario.findByPk(id);
+    if (!usuario) {
+      return errorResponse(res, 404, 'Usuario no encontrado');
+    }
+
+    // Solo administradores pueden eliminar usuarios
+    if (req.usuario.rol !== 'administrador') {
+      return errorResponse(res, 403, 'No autorizado para eliminar usuarios');
+    }
+
+    // No permitir que un administrador se elimine a sí mismo
+    if (req.usuario.id === usuario.id) {
+      return errorResponse(res, 400, 'No puedes eliminarte a ti mismo');
+    }
+
+    // Desactivar usuario (eliminación lógica)
+    await usuario.update({ activo: false });
+
+    // Publicar evento de usuario eliminado
+    await publishUserDeleted(usuario.id);
+
+    return successResponse(res, 200, 'Usuario eliminado exitosamente', {
+      usuario: {
+        id: usuario.id,
+        email: usuario.email,
+        activo: usuario.activo
+      }
+    });
+  } catch (error) {
+    console.error('Error al eliminar usuario:', error);
+    return errorResponse(res, 500, 'Error al eliminar usuario');
+  }
+};
+
 module.exports = {
   registroCliente,
   registro,
   login,
+  completarPerfil,
   validarToken,
   obtenerPerfil,
-  obtenerUsuariosInternos
+  obtenerUsuariosInternos,
+  actualizarUsuario,
+  eliminarUsuario
 };
